@@ -4,7 +4,7 @@ const {FishError, FishSuit, FishGame, FishGameBuilder} = require('./fish');
 const {Suit, Rank, Card} = require('./card');
 const {Deck} = require('./deck');
 
-const botAdmins = new Set((process.env.FISH_AUTHORS || "").split(":"));
+const botAdmins = (process.env.FISH_AUTHORS || "").split(":");
 
 const toss = err => {throw err};
 
@@ -170,7 +170,7 @@ class FishBotCommands {
 
 		"_game": "Game Creation",
 		"start": "Begin a game",
-		"join": "Join or create a game",
+		"join": "Join or create a game or team",
 		"leave": "Leave a game",
 		"options": "List all game options",
 		"enable": "Enable game options",
@@ -269,7 +269,7 @@ class FishBotCommands {
 	}
 
 	teamInfo(game) {
-		const teamids = game.teams.map(t => t.players);
+		const teamids = game.teams.map(t => Array.from(t.players));
 		let info = `**Teams:**`;
 		for(let i = 0; i < teamids.length; i++) {
 			info += `\n\n__Team ${FISH_SIDES[i]}__: ${teamids[i].map(h => this.bot.users.get(h.handle).tag + ` [**${h.character}**]`).join(", ") || "Nobody"}`;
@@ -331,7 +331,7 @@ class FishBotCommands {
 	}
 
 	cmd_usage(msg) {
-		msg.author.send(extraInfo.replace(/\$\$/g, this.bot.prefix) + `\n\n**Questions? Concerns? Bot broke?** Contact ${this.renderList(botAdmins.map(this.renderPlayer), "or")}`);
+		msg.author.send(extraInfo.replace(/\$\$/g, this.bot.prefix) + `\n\n**Questions? Concerns? Bot broke?** Contact ${this.renderList(botAdmins.map(a => `<@${a}>`), "or")}.`);
 	}
 
 	cmd_options(msg) {
@@ -411,7 +411,7 @@ class FishBotCommands {
 	}
 
 	cmd_start(msg) {
-		let game = this.gameFor(msg);
+		let game = this.gameBuilderFor(msg);
 		const players = game.totalPlayers();
 		if (players < FishGame.MIN_PLAYERS)
 			return msg.channel.send(`Can't start without at least ${FishGame.MIN_PLAYERS} players!`);
@@ -419,10 +419,9 @@ class FishBotCommands {
 			return msg.channel.send(`Can't start, teams too imbalanced!`);
 		game = this.bot.games[msg.channel.id] = game.build([charPlugin(), playerEventPlugin(this, msg.channel, x => this.bot.users.get(x))]);
 		game.voteCancels = 0;
-		game.voteTarget = Math.floor(players / 2) + 1;
+		game.voteTarget = Math.ceil(players / 2);
 		game.on("gameBegin", () => {
 			msg.channel.send(`The game of Fish begins!\n` + this.teamInfo(game));
-			this.cmd_info(msg);
 		});
 		game.on("gameEnd", winners => {
 			if (winners.length === 1) {
@@ -505,7 +504,7 @@ class FishBotCommands {
 		if (game.moveCard(donor, player, card))
 			message += `**and succeeds!**`;
 		else
-			message += `**but fails.**`;
+			message += `*but fails.*`;
 		const mp = msg.channel.send(message);
 		if (!game.config.get("bookkeeping"))
 			mp.then(m => m.delete(10000));
@@ -631,7 +630,7 @@ class FishBotCommands {
 	}
 
 	cmd_eval(msg, args) {
-		if (!botAdmins.has(msg.author.id))
+		if (!~botAdmins.indexOf(msg.author.id))
 			return msg.channel.send("*Nice try.*");
 		let res;
 		try {

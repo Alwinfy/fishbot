@@ -20,6 +20,10 @@ class FishSuit {
 	static ALL = Object.freeze((() => {
 		const val = [];
 		val.push(new FishSuit("Jokers", [
+			Card.cardFor(Suit.SPADES, Rank.EIGHT),
+			Card.cardFor(Suit.HEARTS, Rank.EIGHT),
+			Card.cardFor(Suit.DIAMONDS, Rank.EIGHT),
+			Card.cardFor(Suit.HEARTS, Rank.EIGHT),
 			Card.cardFor(Suit.SPADES, Rank.JOKER),
 			Card.cardFor(Suit.HEARTS, Rank.JOKER)
 		]));
@@ -82,8 +86,8 @@ class FishPlayer extends EventEmitter {
 			return card in this.game.deck.cards;
 		if (!this.game.config.get("duplicates") && this.hand.has(card))
 			return false;
-		if (card.rank === Rank.EIGHT) return false;
 		const hsuit = FishSuit.suitFor(card).cards;
+		if (!hsuit) return false;
 		for (const card of hsuit)
 			if (this.hand.has(card))
 				return true;
@@ -188,11 +192,11 @@ class FishGameBuilder extends BasicOptions {
 			key: "jokers",
 			name: "Jokers",
 			desc: "Whether Jokers are enabled for this game",
-			value: false
+			value: true
 		}, {
-			key: "duplicates",
-			name: "Duplicate Requests",
-			desc: "Whether you're allowed to ask for a card you have",
+			key: "quick",
+			name: "Quick Finish",
+			desc: "Whether the game ends as soon as a team has 5+ halfsuits",
 			value: false
 		}, {
 			key: "bookkeeping",
@@ -210,9 +214,14 @@ class FishGameBuilder extends BasicOptions {
 			desc: "Whether players can pass their turn to opponents",
 			value: false
 		}, {
-			key: "quick",
-			name: "Quick Finish",
-			desc: "Whether the game ends as soon as a team has 5+ halfsuits",
+			key: "countercall",
+			name: "Countercalling",
+			desc: "Whether you're allowed to declare opposing teams' half-suits",
+			value: false
+		}, {
+			key: "duplicates",
+			name: "Duplicate Requests",
+			desc: "Whether you're allowed to ask for a card you have",
 			value: false
 		}, {
 			key: "chaos",
@@ -234,8 +243,14 @@ class FishGameBuilder extends BasicOptions {
 		return null;
 	}
 
+	effectiveSide(handle) {
+		if (this.teams[0].has(handle)) return 1;
+		if (this.teams[1].has(handle)) return 0;
+		return +(this.teams[0].size > this.teams[1].size);
+	}
+
 	addHandle(handle, side) {
-		const teamid = ~side ? side : +(this.teams[0].size > this.teams[1].size);
+		const teamid = ~side ? side : this.effectiveSide(handle);
 		const team = this.teams[teamid];
 		if (team.has(handle)) return -1;
 		this.removeHandle(handle);
@@ -285,6 +300,7 @@ class FishGame extends EventEmitter {
 	static ERR_BAD_REQUEST  = new FishError("You're not allowed to request that right now.");
 	static ERR_TEAM_REQUEST = new FishError("You can't request a card from someone on your team.");
 	static ERR_DECLARE_SIZE = new FishError("You've declared for the wrong number of cards.");
+	static ERR_DECLARE_HOMO = new FishError("Not everyone that you declared was on the same team.");
 	static ERR_DECLARE_TEAM = new FishError("You can't declare a card held by an opponent.");
 	static ERR_BAD_SELFDEC  = new FishError("You don't have all the cards of that half-suit.");
 	static ERR_EARLY_LIQUID = new FishError("Some of your team members still have cards.");
@@ -299,7 +315,7 @@ class FishGame extends EventEmitter {
 	constructor(cfg, teams, plugins) {
 		super();
 		this.config = cfg;
-		this.deck = new DeckBuilder().set("badRanks", [Rank.EIGHT]).set("hasJokers", cfg.get("jokers")).build().shuffle();
+		this.deck = new DeckBuilder().set("badRanks", cfg.get("jokers") ? [] : [Rank.EIGHT]).set("hasJokers", cfg.get("jokers")).build().shuffle();
 		this.remainingSuits = new Set(FishSuit.ALL.slice(+!cfg.get("jokers")));
 		this.finished = false;
 
@@ -419,8 +435,8 @@ class FishGame extends EventEmitter {
 			throw FishGame.ERR_DECLARE_SIZE;
 		}
 		for (const player of players)
-			if (player.team !== declarer.team)
-				throw FishGame.ERR_DECLARE_TEAM;
+			if (player.team !== (this.config.get("countercall") ? players[0] : declarer).team)
+				throw this.config.get("countercall") ? FishGame.ERR_DECLARE_HOMO : FishGame.ERR_DECLARE_TEAM;
 		let success = true;
 		for (let i = 0; i < suit.cards.length; i++)
 			if (!players[i].hasCard(suit.cards[i])) {
