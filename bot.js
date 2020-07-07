@@ -15,8 +15,9 @@ const extraInfo = `\
 Fish is a game for about 4-12 players, split into two teams. The object of the game is to claim "half-suits"-- sets of (usually) six cards-- for your team (use the \`$$deck\` command for more info).
 When the game begins, a random person is chosen as the inquisitor. The inquisitor can ask someone on the opposing team for a card using \`$$request <player> <card>\`.
 Each player is also assigned a letter-- the character in brackets as seen in \`$$info\` and the game start message. These are used when *declaring* a half-suit.
-To declare a half-suit, use \`$$request <suit name> <string of letters>\`, where each letter corresponds to the person you think holds that card.
-You can specify players with pings or player-characters (e.g. "@someone#1234" or "B"); suits with their names or abbreviations (e.g. "High Spades" or "HS"), and cards with their names or abbreviations (e.g. "Queen of Hearts", "QoH", or "Q\u2661".
+To declare a half-suit, use \`$$declare <suit name> <string of letters>\`, where each letter corresponds to the person you think holds that card.
+If you have all six cards in the half-suit, you can also say \`$$selfdeclare <suit name>\`.
+In general, you can specify players with pings or player-characters (e.g. "@someone#1234" or "B"); suits with their names or abbreviations (e.g. "High Spades" or "HS"), and cards with their names or abbreviations (e.g. "Queen of Hearts", "QoH", or "Q\u2661".
 If you're out of cards, you can pass your turn with \`$$pass <player>\`.
 If you're right, your team claims the suit; if you're wrong your opponents do.
 The team that gets the most half-suits wins. Good luck.`;
