@@ -4,10 +4,10 @@
 class Suit {
 	static ALL	= [];
 
-	static SPADES	= new Suit("\u2660", "Spades",	 false);
+	static SPADES	= new Suit("\u2664", "Spades",	 false);
 	static HEARTS	= new Suit("\u2661", "Hearts",	 true);
 	static DIAMONDS = new Suit("\u2662", "Diamonds", true);
-	static CLUBS	= new Suit("\u2663", "Clubs",	 false);
+	static CLUBS	= new Suit("\u2667", "Clubs",	 false);
 
 	constructor(c, name, red) {
 		this.character = c;

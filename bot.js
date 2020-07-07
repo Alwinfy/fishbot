@@ -30,7 +30,7 @@ class Parser {
 	}
 
 	static parseFishSuit(str, game) {
-		const FISH_SUIT_RE = /\b(l(?:ow)?|h(?:i(?:gh)?)?)\s*([\u2660-\u2663hscd])|(\bjo)/i;
+		const FISH_SUIT_RE = /\b(l(?:ow)?|h(?:i(?:gh)?)?)\s*([\u2660-\u2667hscd])|(\bjo)/i;
 		const match = str.toLowerCase().match(FISH_SUIT_RE);
 		if (!match) return null;
 		let fsuit = null;
@@ -46,7 +46,7 @@ class Parser {
 	}
 
 	static parseCards(str, game) {
-		const CARD_RE = /\b((?:10|[1-79jqka](?:\s*o[f']?\s*)?)|[a-z]+\s*o[f']?\s*)([\u2660-\u2663hsd]|c(?=[^e]|$))|\b([rb][a-z]*\s*j)/ig;
+		const CARD_RE = /\b((?:10|[1-79jqka])|[a-z]+\s*o[f']?\s*)(?:\s*o[f']?\s*)?([\u2660-\u2667hsd]|c(?=[^e]|$))|\b([rb][a-z]*\s*j)/ig;
 		const hits = [];
 		for (const match of str.toLowerCase().matchAll(CARD_RE)) {
 			if (match[3] && game && game.cfg.get("jokers")) {
@@ -62,9 +62,10 @@ class Parser {
 	}
 
 	static parsePlayer(str, game) {
-		const MENTION_RE = /<@!?(\d+)>/;
+		const MENTION_RE = /[^a-z0-9]*([a-z]|\d+)[^a-z0-9]*/i;
 		const match = str.match(MENTION_RE);
-		return game.playerFor(str) || (match && game.playerFor(match[1])) || Parser.parsePlayerChar(str, game);
+		if (!match) return null;
+		return game.playerFor(match[1]) || Parser.parsePlayerChar(match[1], game);
 	}
 
 	static parsePlayerChar(str, game) {
@@ -86,7 +87,7 @@ class Parser {
 	}
 
 	static parseSide(str) {
-		if (!str) return -1;
+		if (!str.trim().length) return -1;
 		for (let i = 0; i < FISH_SIDES.length; i++)
 			if (FISH_SIDES[i].toLowerCase().startsWith(str.toLowerCase()))
 				return i;
@@ -136,6 +137,11 @@ class FishBotCommands {
 	static CODE_PREFIX = "cmd_";
 
 	static COMMANDS = {
+		"_general": "Bot Health",
+		"help": "`void *ptr = &ptr;`",
+		"ping": "Check if bot is online",
+
+		"_gameplay": "Gameplay",
 		"info": "Get info about the current game",
 		"abort": "Vote to cancel a running game",
 		"deck": "Get info about the game deck",
@@ -147,17 +153,17 @@ class FishBotCommands {
 		"liquidate": "Declare Liquidation for your team",
 		"poke": "Ping whoever's turn it is",
 
-		"help": "`void *ptr = &ptr;`",
-		"ping": "Check if bot is online",
+		"_game": "Game Creation",
+		"start": "Begin a game",
 		"join": "Join the game in the current channel",
 		"leave": "Leave the game in the current channel",
 		"options": "List all options",
 		"enable": "Enable options",
 		"disable": "Disable options",
-		"start": "Begin a game",
 
 		"eval": null,
 		"you": null,
+		"off": null,
 		"ish": null,
 	};
 	static ALIASES = {
@@ -166,9 +172,13 @@ class FishBotCommands {
 		"start": ["begin"],
 		"abort": ["end", "quit", "stop", "cancel"],
 		"common": ["ck"],
-		"request": ["get", "ask"],
-		"declare": ["claim"],
-		"selfdeclare": ["sd"]
+		"request": ["get", "ask", "snatch", "grab", "yoink"],
+		"declare": ["claim", "yeet"],
+		"selfdeclare": ["sd"],
+		"help": ["?"],
+		"options": ["opts"],
+		"enable": ["set"],
+		"disable": ["unset"],
 	};
 
 	static ERR_NO_GAME     = new FishError("No game is happening in this channel-- create one!");
@@ -181,6 +191,10 @@ class FishBotCommands {
 		this.docstrings = [];
 		this.commands = {};
 		for (const cmd in FishBotCommands.COMMANDS) {
+			if (cmd.startsWith("_")) {
+				this.docstrings.push(`\n__${FishBotCommands.COMMANDS[cmd]}:__`);
+				continue;
+			}
 			const func = this[FishBotCommands.CODE_PREFIX + cmd] || toss(new Error(`No function in ${this} called ${cmd}!`));
 			this.commands[cmd] = func.bind(this);
 			if (cmd in FishBotCommands.ALIASES)
@@ -285,7 +299,7 @@ class FishBotCommands {
 
 	// Commands
 	cmd_help(msg) {
-		msg.channel.send(`**FishBot v${this.bot.version}**\n__*Command list:*__\n${this.docstrings.map(x => this.bot.prefix + x).join('\n')}\n*Underlined sections of commands are shorthands.*`);
+		msg.channel.send(`**FishBot v${this.bot.version}**\n__*Command list:*__\n${this.docstrings.map(x => x.startsWith('\n') ? x : this.bot.prefix + x).join('\n')}\n*Underlined sections of commands are shorthands.*`);
 	}
 
 	cmd_ping(msg) {
@@ -440,7 +454,7 @@ class FishBotCommands {
 		for(let i = 0; i < teamids.length; i++) {
 			info += `\n__Team ${FISH_SIDES[i]}__: ${teamids[i].map(h => this.bot.users.get(game.started ? h.handle : h).tag + (game.started ? ` [${h.character}]` : "")).join(", ") || "Nobody"}`;
 			if (game.started)
-				info += `\n - **Score: __${game.teams[i].score()}__** (${this.renderList(Array.from(game.teams[i].ownedSuits))})`;
+				info += `\n - Score: **${game.teams[i].score()}** (${this.renderList(Array.from(game.teams[i].ownedSuits))})`;
 		}
 		info += `\n${this.optsInfo(game)}`;
 		info += `\n*${this.pokeInfo(game)}*`;
@@ -507,13 +521,13 @@ class FishBotCommands {
 		if (!target)
 			return msg.channel.send(`Usage: ${this.bot.prefix}pass [receiver]`);
 		game.passTurn(player, target);
-		msg.channel.send(`${this.renderPlayer(player)} passes their turn to ${this.renderPlayer(target)}!`);
+		msg.channel.send(`${this.renderPlayer(player)} passes their turn to ${this.renderPlayer(target)}.`);
 	}
 
 	cmd_liquidate(msg) {
 		const player = this.activePlayerFor(msg);
 		player.game.liquidate(player.team);
-		msg.channel.send(`${this.renderTeam(player.team)} is out of cards and claims Liquidation!`);
+		msg.channel.send(`**Team ${this.renderTeam(player.team)} is out of cards and claims Liquidation!**`);
 	}
 
 	cmd_poke(msg) {
@@ -541,6 +555,8 @@ class FishBot extends require("discord.js").Client {
 	static MAX_PLAYERS = FISH_CHARS.length;
 
 	prefix = "f.";
+
+	version = "0.1.0-alpha";
 
 	checkPrefix(msg) {
 		const trimmed = msg.content.replace(/^\s+/, '');

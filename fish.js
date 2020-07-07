@@ -83,6 +83,7 @@ class FishPlayer extends EventEmitter {
 			return card in this.game.deck.cards;
 		if (!this.game.config.get("duplicates") && this.hand.has(card))
 			return false;
+		if (card.rank == Rank.EIGHT) return false;
 		const hsuit = FishSuit.suitFor(card).cards;
 		for (const card of hsuit)
 			if (this.hand.has(card))
@@ -94,10 +95,11 @@ class FishPlayer extends EventEmitter {
 		if (this.game.config.get("chaos"))
 			return new Set(this.game.deck.cards);
 		const cards = new Set();
+		const hsuits = new Set();
 		for (const card of this.hand)
 			hsuits.add(FishSuit.suitFor(card));
 		for (const suit of hsuits)
-			for (const card of suit)
+			for (const card of suit.cards)
 				if (!this.hand.has(card) || this.game.config.get("duplicates"))
 					cards.add(card);
 		return cards;
@@ -234,7 +236,7 @@ class FishGameBuilder extends BasicOptions {
 	}
 
 	addHandle(handle, side) {
-		const teamid = ~side ? side : +(this.teams[0].length > this.teams[1].length);
+		const teamid = ~side ? side : +(this.teams[0].size > this.teams[1].size);
 		const team = this.teams[teamid];
 		if (team.has(handle)) return -1;
 		this.removeHandle(handle);
@@ -282,7 +284,7 @@ class FishTeam {
 class FishGame extends EventEmitter {
 	static ERR_WRONG_PLAYER = new FishError("It's not currently your turn!");
 	static ERR_BAD_REQUEST  = new FishError("You can't request that right now!");
-	static ERR_SELF_REQUEST = new FishError("You can't request a card from yourself!");
+	static ERR_TEAM_REQUEST = new FishError("You can't request a card from someone on your team!");
 	static ERR_DECLARE_SIZE = new FishError("You've declared for the wrong number of cards!");
 	static ERR_DECLARE_TEAM = new FishError("You can't declare a card held by an opponent!");
 	static ERR_BAD_SELFDEC  = new FishError("You don't have all the cards of that suit!");
@@ -349,7 +351,7 @@ class FishGame extends EventEmitter {
 	}
 
 	endCondition() {
-		const quickWinners = this.config.get("quick") && this.scores.filter(s => s >= this.winScore);
+		const quickWinners = this.config.get("quick") && this.teams.filter(t => t.score() >= this.winScore);
 		if (quickWinners)
 			return quickWinners;
 		if (this.remainingSuits.size)
@@ -374,10 +376,10 @@ class FishGame extends EventEmitter {
 	}
 
 	moveCard(src, dest, card) {
-		if (src.handle === dest.handle)
-			throw FishGame.ERR_SELF_REQUEST;
 		if (!this.isTurn(dest))
 			throw FishGame.ERR_WRONG_PLAYER;
+		if (src.team === dest.team)
+			throw FishGame.ERR_TEAM_REQUEST;
 		if (!dest.canRequest(card))
 			throw FishGame.ERR_BAD_REQUEST;
 		return dest.takeFrom(card, src);
@@ -385,7 +387,7 @@ class FishGame extends EventEmitter {
 
 	liquidate(team) {
 		for (const player of team.players)
-			if (player.requestables().size > 0)
+			if (player.hand.size > 0)
 				throw FishGame.ERR_EARLY_LIQUID;
 		this.emit("liquidate", team);
 		this.currentPlayer = null;
@@ -394,7 +396,7 @@ class FishGame extends EventEmitter {
 	passTurn(giver, taker) {
 		if (!this.isTurn(giver))
 			throw FishGame.ERR_WRONG_PLAYER;
-		if (!this.config.get("freepass") && giver.requestables().size > 0)
+		if (!this.config.get("freepass") && giver.hand.size > 0)
 			throw FishGame.ERR_EARLY_PASS;
 		if (!taker.requestables().size)
 			throw FishGame.ERR_RECUR_PASS;
