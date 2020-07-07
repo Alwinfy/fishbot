@@ -43,6 +43,7 @@ class BasicOptions extends Options {
 			if (!key)
 				throw new Error(`Bad option spec: No attr 'key' on object ${obj}`);
 
+			this.listing.push(key);
 			this.names[key] = obj.name || key;
 			this.descs[key] = obj.desc || "";
 			this.preds[key] = obj.predicate || (_ => true);

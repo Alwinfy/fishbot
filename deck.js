@@ -61,14 +61,14 @@ class Deck {
 	}
 
 	takeRemaining() {
-		return this.dealSome(this.size());
+		return this.dealSome(this.size);
 	}
 
 	partitionRemaining(count) {
 		const partitions = [];
 		while (count)
 			partitions.push(this.dealSome(0 | this.size() / count--));
-		return shuffleList(partitions);
+		return Deck.shuffleList(partitions);
 	}
 
 	static sortCards(cards) {

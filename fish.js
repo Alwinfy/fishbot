@@ -6,12 +6,23 @@ const {DeckBuilder}  = require("./deckbuilder");
 const {Deck}  = require("./deck");
 const {Suit, Rank, Card}  = require("./card");
 
+class FishError extends Error {
+	constructor(str) {
+		super(str);
+		this.str = str;
+	}
+
+	toString() {
+		return this.str;
+	}
+}
+
 class FishSuit {
 	static ALL = Object.freeze((() => {
 		const val = [];
 		val.push(new FishSuit("Jokers", [
-			Card.cardFor(Rank.JOKER, Suit.SPADES),
-			Card.cardFor(Rank.JOKER, Suit.HEARTS)
+			Card.cardFor(Suit.SPADES, Rank.JOKER),
+			Card.cardFor(Suit.HEARTS, Rank.JOKER)
 		]));
 		for (let suit of Suit.ALL) {
 			val.push(new FishSuit(`Low ${suit.name}`, "TWO THREE FOUR FIVE SIX SEVEN".split(" ").map(r => Card.cardFor(suit, Rank[r]))));
@@ -31,6 +42,10 @@ class FishSuit {
 		return !!~this.cards.indexOf(card);
 	}
 
+	toString() {
+		return this.name;
+	}
+
 	static suitFor(card) {
 		for (const suit of FishSuit.ALL)
 			if (suit.contains(card))
@@ -40,20 +55,19 @@ class FishSuit {
 }
 
 class FishPlayer extends EventEmitter {
-	constructor(game, id, handle, hand, plugins) {
+	constructor(game, handle, hand, plugins) {
+		super();
 		this.game = game;
 		this.team = null;
-		this.id = id;
 		this.handle = handle;
 		this.hand = new Set(hand);
 		this.on("giveCard", card => {
-			this.hand.remove(card);
-			this.emit("handChange", this.hand);
+			this.hand.delete(card);
 		});
 		this.on("takeCard", card => {
 			this.hand.add(card);
-			this.emit("handChange", this.hand);
 		});
+		this.on("loseSuit", this.removeSuit);
 
 		this.plugins = {};
 		for (let p of plugins)
@@ -69,9 +83,9 @@ class FishPlayer extends EventEmitter {
 			return card in this.game.deck.cards;
 		if (!this.game.config.get("duplicates") && this.hand.has(card))
 			return false;
-		const hsuit = FishSuit.forCard(card).cards;
-		for (const card of this.hand)
-			if (hsuit.has(card))
+		const hsuit = FishSuit.suitFor(card).cards;
+		for (const card of hsuit)
+			if (this.hand.has(card))
 				return true;
 		return false;
 	}
@@ -81,7 +95,7 @@ class FishPlayer extends EventEmitter {
 			return new Set(this.game.deck.cards);
 		const cards = new Set();
 		for (const card of this.hand)
-			hsuits.add(FishSuit.forCard(card));
+			hsuits.add(FishSuit.suitFor(card));
 		for (const suit of hsuits)
 			for (const card of suit)
 				if (!this.hand.has(card) || this.game.config.get("duplicates"))
@@ -90,10 +104,12 @@ class FishPlayer extends EventEmitter {
 	}
 
 	takeFrom(card, other) {
-		const had = other.has(card);
+		const had = other.hand.has(card);
 		if (had) {
 			this.emit("takeCard", card);
+			this.emit("handChange", this.hand);
 			other.emit("giveCard", card);
+			other.emit("handChange", other.hand);
 		}
 		else {
 			this.emit("takeCardFail", card);
@@ -102,9 +118,22 @@ class FishPlayer extends EventEmitter {
 		this.emit("turnEnd", had ? this : other);
 		return had;
 	}
+
+	removeSuit(suit) {
+		let affected = false;
+		for (const card of suit.cards)
+			if (this.hand.has(card)) {
+				this.emit("giveCard", card);
+				affected = true;
+			}
+		if (affected)
+			this.emit("handChange", this.hand);
+	}
 }
 
 class FishPlayerAnalyzerPlugin {
+	static pluginName = "analyzer";
+
 	constructor(player) {
 		this.player = player;
 		this.has    = new Set(); // cards everyone knows I have
@@ -126,14 +155,14 @@ class FishPlayerAnalyzerPlugin {
 
 	onTake(card) {
 		this.has.add(card);
-		this.hasNot.remove(card);
-		this.hasSuit.remove(FishSuit.suitFor(card));
+		this.hasNot.delete(card);
+		this.hasSuit.delete(FishSuit.suitFor(card));
 	}
 
 	onGive(card) {
-		this.has.remove(card);
+		this.has.delete(card);
 		this.hasNot.add(card);
-		this.hasSuit.remove(FishSuit.suitFor(card));
+		this.hasSuit.delete(FishSuit.suitFor(card));
 	}
 
 	onTakeFail(card) {
@@ -205,7 +234,7 @@ class FishGameBuilder extends BasicOptions {
 	}
 
 	addHandle(handle, side) {
-		const teamid = ~side ? side : (this.teams[0].length > this.teams[1].length);
+		const teamid = ~side ? side : +(this.teams[0].length > this.teams[1].length);
 		const team = this.teams[teamid];
 		if (team.has(handle)) return -1;
 		this.removeHandle(handle);
@@ -216,7 +245,7 @@ class FishGameBuilder extends BasicOptions {
 	removeHandle(handle) {
 		const team = this.teamFor(handle);
 		if (team) {
-			team.remove(handle);
+			team.delete(handle);
 			return true;
 		}
 		return false;
@@ -225,7 +254,7 @@ class FishGameBuilder extends BasicOptions {
 	totalPlayers() {
 		let c = 0;
 		for (const team of this.teams)
-			c += team.size();
+			c += team.size;
 		return c;
 	}
 
@@ -240,34 +269,38 @@ class FishTeam {
 		this.players = new Set(players);
 		for (const player of players)
 			player.team = this;
-		this.ownedSets = new Set();
+		this.ownedSuits = new Set();
 		this.ordinal = i;
 		this.opponent = null;
 	}
 
 	score() {
-		return this.ownedSets.size();
+		return this.ownedSuits.size;
 	}
 }
 
 class FishGame extends EventEmitter {
-	static ERR_WRONG_PLAYER = Symbol("It's not currently your turn!");
-	static ERR_BAD_REQUEST  = Symbol("You can't request that right now!");
-	static ERR_DECLARE_SIZE = Symbol("You've declared for the wrong number of cards!");
-	static ERR_DECLARE_TEAM = Symbol("You can't declare a card held by an opponent!");
-	static ERR_BAD_SELF     = Symbol("You don't have all the cards of that suit!");
-	static ERR_EARLY_LIQUID = Symbol("It's too early for your team to liquidate!");
-	static ERR_EARLY_PASS   = Symbol("You can still ask for cards!");
-	static ERR_ENEMY_PASS   = Symbol("You can't pass your turn to the enemy!");
+	static ERR_WRONG_PLAYER = new FishError("It's not currently your turn!");
+	static ERR_BAD_REQUEST  = new FishError("You can't request that right now!");
+	static ERR_SELF_REQUEST = new FishError("You can't request a card from yourself!");
+	static ERR_DECLARE_SIZE = new FishError("You've declared for the wrong number of cards!");
+	static ERR_DECLARE_TEAM = new FishError("You can't declare a card held by an opponent!");
+	static ERR_BAD_SELFDEC  = new FishError("You don't have all the cards of that suit!");
+	static ERR_EARLY_LIQUID = new FishError("It's too early for your team to liquidate!");
+	static ERR_EARLY_PASS   = new FishError("You can still ask for cards!");
+	static ERR_RECUR_PASS   = new FishError("You can't pass your turn to someone who's out of cards!");
+	static ERR_ENEMY_PASS   = new FishError("You can't pass your turn to the enemy!");
 
 	static MIN_PLAYERS = 4;
 
 	started = true;
 
 	constructor(cfg, teams, plugins) {
+		super();
 		this.config = cfg;
-		this.deck = new DeckBuilder().set("badRanks", [Rank.EIGHT]).set("hasJokers", cfg.get("jokers")).build();
-		this.remainingSets = new Set(FishSuit.ALL.slice(cfg.get("jokers")));
+		this.deck = new DeckBuilder().set("badRanks", [Rank.EIGHT]).set("hasJokers", cfg.get("jokers")).build().shuffle();
+		this.remainingSuits = new Set(FishSuit.ALL.slice(+!cfg.get("jokers")));
+		this.finished = false;
 
 		if (cfg.get("bookkeeping"))
 			plugins.push(FishPlayerAnalyzerPlugin);
@@ -277,7 +310,7 @@ class FishGame extends EventEmitter {
 		for (let i = 0; i < teams.length; i++) {
 			const roster = [];
 			for (const handle of teams[i]) {
-				const player = new FishPlayer(this, h, hands.pop(), plugins);
+				const player = new FishPlayer(this, handle, hands.pop(), plugins);
 				player.on("turnEnd", this.onTurnEnd.bind(this));
 				this.players.push(player);
 				roster.push(player);
@@ -286,8 +319,7 @@ class FishGame extends EventEmitter {
 		}
 		this.teams[0].opponent = this.teams[1];
 		this.teams[1].opponent = this.teams[0];
-		this.players = this.handles.flat().map(h => new FishPlayer(this, h, hands.pop(), plugins));
-		this.winScore = 1 + (0 | this.remainingSets / 2);
+		this.winScore = 1 + (0 | this.remainingSuits / 2);
 		this.currentPlayer = this.players[0 | Math.random() * this.players.length];
 		setTimeout(() => this.begin());
 	}
@@ -303,23 +335,28 @@ class FishGame extends EventEmitter {
 
 	onTurnEnd(nextPlr) {
 		this.currentPlayer = nextPlr;
+		this.currentPlayer.emit("turnStart");
+	}
+
+	checkEnd() {
+		if (this.finished) return true;
 		const winner = this.endCondition();
 		if (winner) {
-			this.emit("gameEnd", winner);
-			return;
+			setTimeout(() => this.emit("gameEnd", winner));
+			return this.finished = true;
 		}
-		this.currentPlayer.emit("turnStart");
+		return false;
 	}
 
 	endCondition() {
 		const quickWinners = this.config.get("quick") && this.scores.filter(s => s >= this.winScore);
 		if (quickWinners)
 			return quickWinners;
-		if (this.remainingSets.size())
+		if (this.remainingSuits.size)
 			return null;
 		if (this.teams[0].score() === this.teams[1].score())
 			return this.teams;
-		return this.teams[this.teams[0].score() < this.teams[1].score()];
+		return [this.teams[+(this.teams[0].score() < this.teams[1].score())]];
 	}
 
 	playerFor(handle) {
@@ -337,6 +374,8 @@ class FishGame extends EventEmitter {
 	}
 
 	moveCard(src, dest, card) {
+		if (src.handle === dest.handle)
+			throw FishGame.ERR_SELF_REQUEST;
 		if (!this.isTurn(dest))
 			throw FishGame.ERR_WRONG_PLAYER;
 		if (!dest.canRequest(card))
@@ -346,7 +385,7 @@ class FishGame extends EventEmitter {
 
 	liquidate(team) {
 		for (const player of team.players)
-			if (player.requestables().size() > 0)
+			if (player.requestables().size > 0)
 				throw FishGame.ERR_EARLY_LIQUID;
 		this.emit("liquidate", team);
 		this.currentPlayer = null;
@@ -355,9 +394,11 @@ class FishGame extends EventEmitter {
 	passTurn(giver, taker) {
 		if (!this.isTurn(giver))
 			throw FishGame.ERR_WRONG_PLAYER;
-		if (!this.config.get("freepass") && giver.requestables().size() > 0)
+		if (!this.config.get("freepass") && giver.requestables().size > 0)
 			throw FishGame.ERR_EARLY_PASS;
-		if (taker.team !== giver.team)
+		if (!taker.requestables().size)
+			throw FishGame.ERR_RECUR_PASS;
+		if (!this.config.get("enemypass") && taker.team !== giver.team)
 			throw FishGame.ERR_ENEMY_PASS;
 		this.currentPlayer = taker;
 		this.emit("turnPass", giver, taker);
@@ -368,8 +409,8 @@ class FishGame extends EventEmitter {
 	declareSelf(declarer, suit) {
 		for (const card of suit.cards)
 			if (!declarer.hand.has(card))
-				throw FishGame.ERR_BAD_SELF;
-		return this.declare(declarer, suit, new Array(suit.cards.size()).map(_ => declarer));
+				throw FishGame.ERR_BAD_SELFDEC;
+		return this.declare(declarer, suit, suit.cards.map(_ => declarer));
 	}
 
 	declare(declarer, suit, players) {
@@ -380,27 +421,24 @@ class FishGame extends EventEmitter {
 			if (player.team !== declarer.team)
 				throw FishGame.ERR_DECLARE_TEAM;
 		let success = true;
-		for (let i = 0; i < set.cards.length; i++)
-			if (!players[i].hasCard(set.cards[i])) {
+		for (let i = 0; i < suit.cards.length; i++)
+			if (!players[i].hasCard(suit.cards[i])) {
 				success = false;
 				break;
 			}
-		const team = success ? player.team : player.team.opponent;
-		team.scoredSets.add(suit);
+		const team = success ? declarer.team : declarer.team.opponent;
+		this.removeSuit(suit);
+		team.ownedSuits.add(suit);
 		setTimeout(() => this.emit("scoreSet", suit, team));
+		this.checkEnd();
 		return success;
 	}
 
 	removeSuit(suit) {
-		const affected = new Set();
-		for (const card of suit.cards)
-			for (const player of this.players)
-				if (player.hand.has(card)) {
-					player.hand.remove(card);
-					affected.add(player);
-				}
-		for (const player of affected)
-			player.emit("handChange", player.hand);
-		this.remainingSuits.remove(suit);
+		for (const player of this.players)
+			player.emit("loseSuit", suit);
+		this.remainingSuits.delete(suit);
 	}
 }
+
+module.exports = {FishError, FishSuit, FishGame, FishGameBuilder};

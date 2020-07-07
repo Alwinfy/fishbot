@@ -1,7 +1,8 @@
 "use strict";
 
-const {FishSuit, FishGame, FishGameBuilder} = require('./fish');
+const {FishError, FishSuit, FishGame, FishGameBuilder} = require('./fish');
 const {Suit, Rank, Card} = require('./card');
+const {Deck} = require('./deck');
 
 const toss = err => {throw err};
 
@@ -9,12 +10,6 @@ const FISH_SIDES = ["Trivial", "Obvious"];
 const FISH_CHARS = "BEFGIMNOPRTUVWXYZ";
 
 class Parser {
-	static checkPrefix(msg) {
-		const trimmed = msg.content.replace(/^\s+/, '');
-		return trimmed.startsWith(this.prefix)
-			? trimmed.substring(0, this.prefix.length) : null;
-	}
-
 	static parseRank(str) {
 		if (+str)
 			return Rank.ALL[+str - 1];
@@ -35,31 +30,31 @@ class Parser {
 	}
 
 	static parseFishSuit(str, game) {
-		const FISH_SUIT_RE = /\b(l(?:ow)?\|h(?:i(?:gh)?)?)\s*([\u2660-\u2663hscd])\|(\bjo)/i;
-		const match = FISH_SUIT_RE.match(str.toLowerCase());
+		const FISH_SUIT_RE = /\b(l(?:ow)?|h(?:i(?:gh)?)?)\s*([\u2660-\u2663hscd])|(\bjo)/i;
+		const match = str.toLowerCase().match(FISH_SUIT_RE);
 		if (!match) return null;
 		let fsuit = null;
 		if (match[3]) {
-			fsuit = FishSuits.ALL[0];
+			fsuit = FishSuit.ALL[0];
 		}
 		else {
 			const rank = match[1][0] == 'l' ? Rank.TWO : Rank.ACE;
-			const suit = parseSuit(match[2]);
+			const suit = Parser.parseSuit(match[2]);
 			fsuit = FishSuit.suitFor(Card.cardFor(suit, rank));
 		}
 		return fsuit;
 	}
 
 	static parseCards(str, game) {
-		const CARD_RE = /\b((?:10|[1-79jqka])|[a-z]+\s*o[f']?\s*)([\u2660-\u2663hscd])|\b([rb][a-z]*\s*j)/i;
+		const CARD_RE = /\b((?:10|[1-79jqka](?:\s*o[f']?\s*)?)|[a-z]+\s*o[f']?\s*)([\u2660-\u2663hsd]|c(?=[^e]|$))|\b([rb][a-z]*\s*j)/ig;
 		const hits = [];
-		for (const match of CARD_RE.matchAll(str.toLowerCase())) {
+		for (const match of str.toLowerCase().matchAll(CARD_RE)) {
 			if (match[3] && game && game.cfg.get("jokers")) {
 				hits.push(Card.cardFor(match[3][0] === "r" ? Suit.HEARTS : Suit.SPADES, Rank.JOKER));
 				continue;
 			}
-			const rank = this.parseRank(match[1]);
-			const suit = this.parseSuit(match[2]);
+			const rank = Parser.parseRank(match[1]);
+			const suit = Parser.parseSuit(match[2]);
 			if (rank && suit)
 				hits.push(Card.cardFor(suit, rank));
 		}
@@ -67,9 +62,9 @@ class Parser {
 	}
 
 	static parsePlayer(str, game) {
-		const MENTION_RE = /<@!?(\d\+)>/;
-		const match = MENTION_RE.match(str);
-		return game.playerFor(str) || (match && game.playerFor(match[1])) || parsePlayerChar(str, game);
+		const MENTION_RE = /<@!?(\d+)>/;
+		const match = str.match(MENTION_RE);
+		return game.playerFor(str) || (match && game.playerFor(match[1])) || Parser.parsePlayerChar(str, game);
 	}
 
 	static parsePlayerChar(str, game) {
@@ -79,10 +74,10 @@ class Parser {
 		return null;
 	}
 
-	static parsePlayerString(str, player) {
+	static parsePlayerString(str, op) {
 		const players = [];
 		for (const chr of str) {
-			const player = (chr === '@' ? player : this.parsePlayerChar(chr, player.game));
+			const player = (chr === '@' ? op : Parser.parsePlayerChar(chr, op.game));
 			if (!player)
 				return null;
 			players.push(player);
@@ -91,6 +86,7 @@ class Parser {
 	}
 
 	static parseSide(str) {
+		if (!str) return -1;
 		for (let i = 0; i < FISH_SIDES.length; i++)
 			if (FISH_SIDES[i].toLowerCase().startsWith(str.toLowerCase()))
 				return i;
@@ -110,45 +106,36 @@ function charPlugin() {
 	return FishPlayerCharPlugin;
 }
 
-function playerEventPlugin(mainchan, usermap) {
+function playerEventPlugin(cmds, mainchan, usermap) {
 	class FishPlayerDiscordPlugin {
 		static pluginName = "playerEvent";
 
 		constructor(player) {
 			this.message = null;
-			usermap(player).createDM().then(dm => setup(player, dm));
+			usermap(player.handle).createDM().then(dm => this.setup(player, dm));
 			player.on("handChange", this.onHandChange.bind(this));
-			player.on("turnStart", () => setTimeout(() => mainchan.send(`It is now <@${player.id}>'s turn.`)));
+			player.on("turnStart", () => setTimeout(() => mainchan.send(`It is now ${cmds.renderPlayer(player)}'s turn.`)));
 		}
 
 		handMessage(hand) {
-			return `Your current hand: ${bot.commands.renderCards(this.hand)}`;
+			return `Your current hand: ${cmds.renderCards(hand)}`;
 		}
 
 		setup(player, dm) {
-			return dm.send(this.handMessage(player)).then(message => this.message = message);
+			return dm.send(this.handMessage(player.hand)).then(message => this.message = message);
 		}
 
 		onHandChange(newHand) {
 			this.message.edit(this.handMessage(newHand));
 		}
 	}
-	return FishBotDiscordPlugin;
+	return FishPlayerDiscordPlugin;
 }
 
 class FishBotCommands {
 	static CODE_PREFIX = "cmd_";
 
 	static COMMANDS = {
-		"help": "`void *ptr = &ptr;`",
-		"ping": "Check if bot is online",
-		"join": "Join the game in the current channel",
-		"leave": "Leave the game in the current channel",
-		"options": "List all options",
-		"enable": "Enable options",
-		"disable": "Disable options",
-		"start": "Begin a game",
-
 		"info": "Get info about the current game",
 		"abort": "Vote to cancel a running game",
 		"deck": "Get info about the game deck",
@@ -160,19 +147,34 @@ class FishBotCommands {
 		"liquidate": "Declare Liquidation for your team",
 		"poke": "Ping whoever's turn it is",
 
+		"help": "`void *ptr = &ptr;`",
+		"ping": "Check if bot is online",
+		"join": "Join the game in the current channel",
+		"leave": "Leave the game in the current channel",
+		"options": "List all options",
+		"enable": "Enable options",
+		"disable": "Disable options",
+		"start": "Begin a game",
+
 		"eval": null,
+		"you": null,
+		"ish": null,
 	};
 	static ALIASES = {
-		"join": ["in"],
-		"leave": ["out"],
-		"cancel": ["end"],
-		"common": ["ck"]
+		"join": ["in", "enter"],
+		"leave": ["out", "exit"],
+		"start": ["begin"],
+		"abort": ["end", "quit", "stop", "cancel"],
+		"common": ["ck"],
+		"request": ["get", "ask"],
+		"declare": ["claim"],
+		"selfdeclare": ["sd"]
 	};
 
-	static ERR_NO_GAME     = Symbol("No game is happening in this channel-- create one!");
-	static ERR_NOT_STARTED = Symbol("The game hasn't started yet!");
-	static ERR_STARTED     = Symbol("The game's already begun!");
-	static ERR_NO_PLAYER   = Symbol("You aren't playing in this game!");
+	static ERR_NO_GAME     = new FishError("No game is happening in this channel-- create one!");
+	static ERR_NOT_STARTED = new FishError("The game hasn't started yet!");
+	static ERR_STARTED     = new FishError("The game's already begun!");
+	static ERR_NO_PLAYER   = new FishError("You aren't playing in this game!");
 
 	constructor(bot) {
 		this.bot = bot;
@@ -210,7 +212,7 @@ class FishBotCommands {
 		const game = this.gameFor(msg);
 		if (!game.started)
 			throw FishBotCommands.ERR_NOT_STARTED;
-		return game.getPlayer(msg.author.id) || toss(FishBotCommands.ERR_NO_PLAYER);
+		return game.playerFor(msg.author.id) || toss(FishBotCommands.ERR_NO_PLAYER);
 	}
 
 	gameBuilderFor(msg) {
@@ -226,7 +228,7 @@ class FishBotCommands {
 		try {
 			this.commands[cmd](msg, args);
 		} catch (e) {
-			if (e instanceof Symbol)
+			if (e instanceof FishError)
 				msg.channel.send(`Error: ${e.toString()}`);
 			else
 				throw e;
@@ -234,13 +236,20 @@ class FishBotCommands {
 	}
 
 	renderTeam(team) {
-		return FISH_TEAMS[team.ordinal];
+		return FISH_SIDES[team.ordinal];
+	}
+
+	renderSuits(suitSet) {
+		const lines = [];
+		for(const suit of suitSet)
+			lines.push(`**${suit}**, ${suit.cards.length} cards: ${this.renderCards(suit.cards)}`);
+		return lines.join("\n") || "None";
 	}
 
 	renderCards(cardset) {
 		const list = Deck.sortCards(Array.from(cardset));
-		if (list.length < 6)
-			return renderList(list);
+		if (list.length < 5)
+			return this.renderList(list);
 		return list.map(c => c.toAbbr()).join(" ");
 	}
 
@@ -256,6 +265,14 @@ class FishBotCommands {
 
 	renderPlayer(plr) {
 		return `<@${plr.handle}>`;
+	}
+
+	optsInfo(game) {
+		const config = game.started ? game.config : game;
+		const enabled = config.getListing().filter(c => config.get(c)).map(c => config.nameFor(c));
+		const disabled = config.getListing().filter(c => !config.get(c)).map(c => config.nameFor(c));
+		return `**Enabled settings:** ${enabled.join(", ") || "None"}`
+		  + `\n**Disabled settings:** ${disabled.join(", ") || "None"}`;
 	}
 
 	pokeInfo(game) {
@@ -276,39 +293,43 @@ class FishBotCommands {
 	}
 
 	cmd_options(msg) {
-		const config = this.gameBuilderFor(msg).config;
+		const config = this.gameBuilderFor(msg);
 		const strings = [];
-		for (const key of config)
-			strings.push(`\n${key} (currently ${config.get(key) ? "enabled" : "disabled"}): **${config.nameFor(key)}** - ${config.descriptionFor(key)}`);
-		msg.channel.send(`**__Current game options:__**${strings.join("")}`);
+		for (const key of config.getListing())
+			strings.push(`\n${key} (${config.get(key) ? "**enabled**" : "*disabled*"}): **${config.nameFor(key)}** - ${config.descriptionFor(key)}`);
+		msg.channel.send(`**__Current game options:__**${strings.join("")}\n\n${this.optsInfo(config)}`);
 	}
 
 	cmd_enable(msg, args) {
-		const config = this.gameBuilderFor(msg).config;
+		const config = this.gameBuilderFor(msg);
 		const succ = [];
 		for (const arg of args) {
-			if (config.has(arg)) {
-				config.set(arg, true);
-				succ.push(config.nameFor(arg));
+			const find = config.getListing().filter(l => l.startsWith(arg));
+			if (find) {
+				config.set(find[0], true);
+				if (!~succ.indexOf(find[0]))
+					succ.push(config.nameFor(find[0]));
 			}
 		}
 		if (succ.length)
-			msg.channel.send(`Enabled options: **${this.renderList(succ)}**`);
+			msg.channel.send(`Enabled options: **${succ.join(", ")}**`);
 		else 
 			msg.channel.send(`Usage: ${this.bot.prefix}enable [options to enable]`);
 	}
 
 	cmd_disable(msg, args) {
-		const config = this.gameBuilderFor(msg).config;
+		const config = this.gameBuilderFor(msg);
 		const succ = [];
 		for (const arg of args) {
-			if (config.has(arg)) {
-				config.set(arg, false);
-				succ.push(config.nameFor(arg));
+			const find = config.getListing().filter(l => l.startsWith(arg));
+			if (find) {
+				config.set(find[0], false);
+				if (!~succ.indexOf(find[0]))
+					succ.push(config.nameFor(find[0]));
 			}
 		}
 		if (succ.length)
-			msg.channel.send(`Disabled options: **${this.renderList(succ)}**`);
+			msg.channel.send(`Disabled options: **${succ.join(", ")}**`);
 		else 
 			msg.channel.send(`Usage: ${this.bot.prefix}disable [options to enable]`);
 	}
@@ -321,22 +342,20 @@ class FishBotCommands {
 			if (!game.teamFor(msg.author.id) && game.totalPlayers() >= FishBot.MAX_PLAYERS)
 				return msg.channel.send(`Too many players this game (capped at ${FishBot.MAX_PLAYERS})!`);
 
-			const side = game.addHandle(msg.author.id, Parser.parseSide(args[0]));
+			const side = game.addHandle(msg.author.id, Parser.parseSide(args[0] || ""));
 			if (~side)
-				msg.channel.send(`${msg.author} has joined this game of Fish.`);
+				msg.channel.send(`${msg.author} has joined the ${FISH_SIDES[side]} team for this game of Fish.`);
 			else
 				msg.channel.send(`You're already on that team!`);
 		} else {
-			this.bot.games[msg.channel.id] = new FishGameBuilder();
-			const side = game.addHandle(msg.author.id);
+			const newGame = this.bot.games[msg.channel.id] = new FishGameBuilder();
+			const side = newGame.addHandle(msg.author.id, Parser.parseSide(args[0] || ""));
 			msg.channel.send(`${msg.author} has created a game of Fish. Type ${this.bot.prefix}join to join.`);
 		}
 	}
 
 	cmd_leave(msg) {
-		const game = this.gameFor(msg);
-		if (game.started)
-			return msg.channel.send("Too late to leave, game has already started.");
+		const game = this.gameBuilderFor(msg);
 		if (game.removeHandle(msg.author.id)) {
 			if (game.totalPlayers())
 				msg.channel.send(`${msg.author} has left the game.`);
@@ -350,31 +369,37 @@ class FishBotCommands {
 	}
 
 	cmd_start(msg) {
-		const game = this.gameFor(msg);
+		let game = this.gameFor(msg);
 		const players = game.totalPlayers();
-		if(players < FishGame.MIN_PLAYERS)
+/*
+		if (players < FishGame.MIN_PLAYERS)
 			return msg.channel.send(`Can't start without at least ${FishGame.MIN_PLAYERS} players!`);
-		game = this.bot.games[msg.channel.id] = game.build([charPlugin(), handDMPlugin(x => this.bot.users.get(x))]);
+		if (Math.abs(fish.teams[0].size - fish.teams[1].size) >= 2)
+			return msg.channel.send(`Teams too imbalanced!`);
+*/
+		game = this.bot.games[msg.channel.id] = game.build([charPlugin(), playerEventPlugin(this, msg.channel, x => this.bot.users.get(x))]);
 		game.voteCancels = 0;
-		game.voteTarget = Math.floor(players / 2);
+		game.voteTarget = Math.floor(players / 2) + 1;
 		game.on("gameBegin", () => {
 			msg.channel.send(`The game of Fish begins!`);
 		});
 		game.on("gameEnd", winners => {
 			if (winners.length === 1) {
 				const winner = winners[0];
-				msg.channel.send(`**The game is over. Team ${this.renderTeam(winner)} wins ${winner.score()} to ${winner.opponent.score()}!**`);
+				msg.channel.send(`**The game is over. Team ${this.renderTeam(winner)} wins ${winner.score()}-${winner.opponent.score()}!**`);
 			}
 			else
 				msg.channel.send(`**The game ends in a tie!**`);
+			delete this.bot.games[msg.channel.id];
 		});
 		game.on("scoreSet", (suit, team) => {
-			msg.channel.send(`**Team ${FISH_TEAMS[team.ordinal]} has acquired the ${suit} half-suit!**`);
+			msg.channel.send(`**Team ${FISH_SIDES[team.ordinal]} has acquired the ${suit} half-suit!**`);
 		});
 	}
 
 	cmd_abort(msg) {
 		const player = this.activePlayerFor(msg);
+		const game = player.game;
 		if (player.attemptedCancel)
 			return msg.channel.send(`You've already voted to abort this game.`);
 		player.attemptedCancel = true;
@@ -383,13 +408,14 @@ class FishBotCommands {
 			message += ", so the game has been canceled";
 			delete this.bot.games[msg.channel.id];
 		}
-		msg.channel.send(msg + ".");
+		msg.channel.send(message + ".");
 	}
 
 	cmd_common(msg, args) {
-		const player = Parser.parsePlayer(args[0]) || this.activePlayerFor(msg);
+		const me = this.activePlayerFor(msg);
+		const player = Parser.parsePlayer(args[0] || "", me.game) || me;
 		let data = [
-			`has ${player.hand.size()} cards`
+			`has ${player.hand.size} cards`
 		];
 		const analyzer = player.plugins.analyzer;
 		if (analyzer) {
@@ -410,29 +436,29 @@ class FishBotCommands {
 		else
 			teamids = game.teams.map(t => Array.from(t)); 
 		const scores = game.started ? game.teams.map(t => t.score()) : [];
-		const config = game.started ? game.config : game;
-		const enabled = config.listing.filter(c => config.get(c)).map(c => config.nameFor(c));
-		const disabled = config.listing.filter(c => !config.get(c)).map(c => config.nameFor(c));
 		let info = `**Current teams:**`;
 		for(let i = 0; i < teamids.length; i++) {
-			info += `\n__Team ${FISH_SIDES[i]}__: ${teamids[i].map(h => this.bot.users.get(game.started ? h.handle : h).tag + game.started ? ` [${h.character}]` : "").join(", ")}`;
+			info += `\n__Team ${FISH_SIDES[i]}__: ${teamids[i].map(h => this.bot.users.get(game.started ? h.handle : h).tag + (game.started ? ` [${h.character}]` : "")).join(", ") || "Nobody"}`;
 			if (game.started)
-				info += ` (holds: ${this.renderList(Array.from(game.teams[i].ownedSets))})`;
+				info += `\n - **Score: __${game.teams[i].score()}__** (${this.renderList(Array.from(game.teams[i].ownedSuits))})`;
 		}
-		info += `\n**Enabled settings:** ${enabled.join(", ")}`;
-		info += `\n**Disabled settings:** ${disabled.join(", ")}`;
+		info += `\n${this.optsInfo(game)}`;
 		info += `\n*${this.pokeInfo(game)}*`;
 		msg.channel.send(info);
 	}
 
 	cmd_deck(msg) {
-		// TODO stub
+		const game = this.activePlayerFor(msg).game;
+		let deck = `**__Unclaimed half-suits:__**\n${this.renderSuits(game.remainingSuits)}`;
+		for (const team of game.teams)
+			deck += `\n**__Suits claimed by team ${this.renderTeam(team)}:__**\n${this.renderSuits(team.ownedSuits)}`;
+		msg.channel.send(deck);
 	}
 
 	cmd_request(msg, args) {
 		const player = this.activePlayerFor(msg);
 		const game = player.game;
-		const donor = Parser.parsePlayer(args[0], game);
+		const donor = Parser.parsePlayer(args[0] || "", game);
 		if (!donor)
 			return msg.channel.send(`Usage: ${this.bot.prefix}request [donor] [card]`);
 		const rest = args.slice(1).join(" ");
@@ -444,7 +470,9 @@ class FishBotCommands {
 			message += `**and succeeds!**`;
 		else
 			message += `**but fails.**`;
-		msg.channel.send(message);
+		const mp = msg.channel.send(message);
+		if (!game.config.get("bookkeeping"))
+			mp.then(m => m.delete(10000));
 	}
 
 	cmd_declare(msg, args) {
@@ -455,7 +483,7 @@ class FishBotCommands {
 			return msg.channel.send(`Usage: ${this.bot.prefix}declare [suit] [owners]`);
 		const owners = Parser.parsePlayerString(args[args.length - 1], player);
 		if (!owners)
-			return msg.channel.send(`Suit **${suit}** has cards in this order: ${this.renderCards(cards)}`);
+			return msg.channel.send(`Suit **${suit}** has cards in this order: ${this.renderCards(suit.cards)}`);
 		if (game.declare(player, suit, owners))
 			msg.channel.send(`${this.renderPlayer(player)}'s declaration was right!`);
 		else
@@ -467,7 +495,7 @@ class FishBotCommands {
 		const game = player.game;
 		const suit = Parser.parseFishSuit(msg.content, game);
 		if (!suit)
-			return msg.channel.send(`Usage: ${this.bot.prefix}declare [suit]`);
+			return msg.channel.send(`Usage: ${this.bot.prefix}selfdeclare [suit]`);
 		game.declareSelf(player, suit);
 		msg.channel.send(`${this.renderPlayer(player)} had all the cards of suit **${suit}**!`);
 	}
@@ -475,7 +503,7 @@ class FishBotCommands {
 	cmd_pass(msg, args) {
 		const player = this.activePlayerFor(msg);
 		const game = player.game;
-		const target = Parser.parsePlayer(args[0], game);
+		const target = Parser.parsePlayer(args[0] || "", game);
 		if (!target)
 			return msg.channel.send(`Usage: ${this.bot.prefix}pass [receiver]`);
 		game.passTurn(player, target);
@@ -493,16 +521,32 @@ class FishBotCommands {
 	}
 
 	cmd_eval(msg, args) {
-		if (msg.author !== env.FISH_AUTHOR)
+		if (msg.author.id !== process.env.FISH_AUTHOR)
 			return msg.channel.send("*Nice try.*");
-		msg.channel.send(eval(args.join(" ")));
+		let res;
+		try {
+			res = eval(`msg => ${args.join(" ")}`)(msg);
+		} catch(e) {
+			res = e;
+		}
+		msg.channel.send("```\n" + res + "```");
 	}
+
+	cmd_you(msg) { msg.channel.send("no u"); }
+	cmd_off(msg) { msg.channel.send("okay :("); }
+	cmd_ish(msg) { msg.channel.send(">\xab(((\xb0>"); }
 }
 
 class FishBot extends require("discord.js").Client {
 	static MAX_PLAYERS = FISH_CHARS.length;
 
 	prefix = "f.";
+
+	checkPrefix(msg) {
+		const trimmed = msg.content.replace(/^\s+/, '');
+		return trimmed.startsWith(this.prefix)
+			? trimmed.substring(this.prefix.length) : null;
+	}
 
 	constructor() {
 		super();
@@ -532,5 +576,5 @@ class FishBot extends require("discord.js").Client {
 let bot;
 if(require.main === module) {
 	bot = new FishBot();
-	bot.login(process.env.TOKEN);
+	bot.login(process.env.TOKEN.trim());
 }

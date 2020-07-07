@@ -66,8 +66,11 @@ class Rank {
 class Card {
 	static ALL = Object.freeze((() => {
 		const val = [];
-		for(let i = 0; i < 54; i++)
-			val.push(new Card(Suit.ALL[i & 3], Rank.ALL[i >> 2]));
+		for(let i = 0; i < 52; i++)
+			val.push(new Card(Suit.ALL[0 | i / 13], Rank.ALL[i % 13]));
+		val.push(new Card(Suit.SPADES, Rank.JOKER));
+		val.push(new Card(Suit.HEARTS, Rank.JOKER));
+		
 		return val;
 	})());
 
@@ -76,12 +79,12 @@ class Card {
 			throw new Error("Please only construct jokers with low suits!");
 		this.suit = suit;
 		this.rank = rank;
-		this.ordinal = suit.ordinal + Suit.ALL.length * rank.ordinal;
+		this.ordinal = (rank.ordinal === 13 ? 52 + suit.ordinal : 13 * suit.ordinal + rank.ordinal);
 		Object.freeze(this);
 	}
 
 	static cardFor(suit, rank) {
-		return Card.ALL[suit.ordinal + 4 * rank.ordinal];
+		return Card.ALL[rank === Rank.JOKER ? 52 + suit.ordinal : 13 * suit.ordinal + rank.ordinal];
 	}
 
 	toString() {
@@ -92,7 +95,7 @@ class Card {
 	toAbbr() {
 		return this.rank === Rank.JOKER
 			? `${this.suit.getColor()[0]}Jo`
-			: `${this.rank.abbr}${this.suit.char}`;
+			: `${this.rank.abbr}${this.suit.character}`;
 	}
 }
 
