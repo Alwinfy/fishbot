@@ -51,7 +51,7 @@ class Parser {
 			fsuit = FishSuit.ALL[0];
 		}
 		else {
-			const rank = match[1][0] == 'l' ? Rank.TWO : Rank.ACE;
+			const rank = match[1][0] === 'l' ? Rank.TWO : Rank.ACE;
 			const suit = Parser.parseSuit(match[2]);
 			fsuit = FishSuit.suitFor(Card.cardFor(suit, rank));
 		}
@@ -291,14 +291,14 @@ class FishBotCommands {
 		return list.map(c => c.toAbbr()).join(" ");
 	}
 
-	renderList(list) {
+	renderList(list, word = "and") {
 		switch (list.length) {
 		case 0: return "None";
 		case 1: return list[0].toString();
-		case 2: return `${list[0]} and ${list[1]}`;
+		case 2: return `${list[0]} ${word} ${list[1]}`;
 		}
 		const last = list.pop();
-		return `${list.join(", ")}, and ${last}`;
+		return `${list.join(", ")}, ${word} ${last}`;
 	}
 
 	renderPlayer(plr) {
@@ -331,7 +331,7 @@ class FishBotCommands {
 	}
 
 	cmd_usage(msg) {
-		msg.author.send(extraInfo.replace(/\$\$/g, this.bot.prefix));
+		msg.author.send(extraInfo.replace(/\$\$/g, this.bot.prefix) + `\n\n**Questions? Concerns? Bot broke?** Contact ${this.renderList(botAdmins.map(this.renderPlayer), "or")}`);
 	}
 
 	cmd_options(msg) {
@@ -616,9 +616,9 @@ class FishBotCommands {
 		if((kept.length || dropped.length) && count <= MAXINFO) {
 			message += ' ';
 			if(kept.length >= 2 || kept[0][1].length >= 2 || dropped.length) {
-				message += `${kept[0][0] == -1 ? '-' : ''}[ ${kept[0][1].map(x => x[1]).join(', ')} ]`;
+				message += `${kept[0][0] === -1 ? '-' : ''}[ ${kept[0][1].map(x => x[1]).join(', ')} ]`;
 				for(let i=1; i<kept.length; i++)
-					message += ` ${kept[i][0] == -1 ? '-' : '+'} [ ${kept[i][1].map(x => x[1]).join(', ')} ]`;
+					message += ` ${kept[i][0] === -1 ? '-' : '+'} [ ${kept[i][1].map(x => x[1]).join(', ')} ]`;
 				if(math) message += ` ${math > 0 ? '+' : '-'} ${Math.abs(math)}`;
 			}
 			if(dropped.length) {

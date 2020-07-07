@@ -82,7 +82,7 @@ class FishPlayer extends EventEmitter {
 			return card in this.game.deck.cards;
 		if (!this.game.config.get("duplicates") && this.hand.has(card))
 			return false;
-		if (card.rank == Rank.EIGHT) return false;
+		if (card.rank === Rank.EIGHT) return false;
 		const hsuit = FishSuit.suitFor(card).cards;
 		for (const card of hsuit)
 			if (this.hand.has(card))
@@ -415,7 +415,7 @@ class FishGame extends EventEmitter {
 	}
 
 	declare(declarer, suit, players) {
-		if (suit.cards.length != players.length) {
+		if (suit.cards.length !== players.length) {
 			throw FishGame.ERR_DECLARE_SIZE;
 		}
 		for (const player of players)

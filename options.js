@@ -18,7 +18,7 @@ class Options {
 		return !!~this.getListing().indexOf(key);
 	}
 
-	set(key, value) {
+	set(key, _value) {
 		throw new Error(`Don't know how to set undefined option: ${key}`);
 	}
 
