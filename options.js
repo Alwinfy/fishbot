@@ -68,7 +68,7 @@ class BasicOptions extends Options {
 	}
 
 	set(key, value) {
-		if (!key in this.data)
+		if (!(key in this.data))
 			super.set(key, value);
 		if (!this.preds[key](value))
 			throw new Error(`Value ${value} doesn't satisfy predicate for ${key} in ${this}!`);

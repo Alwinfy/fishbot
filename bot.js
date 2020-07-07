@@ -42,7 +42,7 @@ class Parser {
 		return null;
 	}
 
-	static parseFishSuit(str, game) {
+	static parseFishSuit(str) {
 		const FISH_SUIT_RE = /\b(l(?:ow)?|h(?:i(?:gh)?)?)\s*([\u2660-\u2667hscd])|(\bjo)/i;
 		const match = str.toLowerCase().match(FISH_SUIT_RE);
 		if (!match) return null;
@@ -268,12 +268,13 @@ class FishBotCommands {
 		return FISH_SIDES[team.ordinal];
 	}
 
-	teamInfo(startedGame) {
+	teamInfo(game) {
 		const teamids = game.teams.map(t => t.players);
 		let info = `**Teams:**`;
 		for(let i = 0; i < teamids.length; i++) {
 			info += `\n\n__Team ${FISH_SIDES[i]}__: ${teamids[i].map(h => this.bot.users.get(h.handle).tag + ` [**${h.character}**]`).join(", ") || "Nobody"}`;
 		}
+		return info;
 	}
 
 	renderSuits(suitSet) {
@@ -309,7 +310,7 @@ class FishBotCommands {
 		const enabled = config.getListing().filter(c => config.get(c)).map(c => config.nameFor(c));
 		const disabled = config.getListing().filter(c => !config.get(c)).map(c => config.nameFor(c));
 		return `**Enabled settings:** ${enabled.join(", ") || "None"}`
-		  + `\n**Disabled settings:** ${disabled.join(", ") || "None"}`;
+			+ `\n**Disabled settings:** ${disabled.join(", ") || "None"}`;
 	}
 
 	pokeInfo(game) {
@@ -391,7 +392,7 @@ class FishBotCommands {
 		} else {
 			const newGame = this.bot.games[msg.channel.id] = new FishGameBuilder();
 			const side = newGame.addHandle(msg.author.id, Parser.parseSide(args[0] || ""));
-			msg.channel.send(`${msg.author} has created a game of Fish. Type ${this.bot.prefix}join to join.`);
+			msg.channel.send(`${msg.author} has created a game of Fish (and joined as ${FISH_SIDES[side]}). Type ${this.bot.prefix}join to join.`);
 		}
 	}
 
@@ -414,7 +415,7 @@ class FishBotCommands {
 		const players = game.totalPlayers();
 		if (players < FishGame.MIN_PLAYERS)
 			return msg.channel.send(`Can't start without at least ${FishGame.MIN_PLAYERS} players!`);
-		if (Math.abs(fish.teams[0].size - fish.teams[1].size) >= 2)
+		if (Math.abs(game.teams[0].size - game.teams[1].size) >= 2)
 			return msg.channel.send(`Can't start, teams too imbalanced!`);
 		game = this.bot.games[msg.channel.id] = game.build([charPlugin(), playerEventPlugin(this, msg.channel, x => this.bot.users.get(x))]);
 		game.voteCancels = 0;
@@ -513,7 +514,7 @@ class FishBotCommands {
 	cmd_declare(msg, args) {
 		const player = this.activePlayerFor(msg);
 		const game = player.game;
-		const suit = Parser.parseFishSuit(msg.content, game);
+		const suit = Parser.parseFishSuit(msg.content);
 		if (!suit)
 			return msg.channel.send(`Usage: ${this.bot.prefix}declare [suit] [owners]`);
 		const owners = Parser.parsePlayerString(args[args.length - 1], player);
@@ -528,7 +529,7 @@ class FishBotCommands {
 	cmd_selfdeclare(msg) {
 		const player = this.activePlayerFor(msg);
 		const game = player.game;
-		const suit = Parser.parseFishSuit(msg.content, game);
+		const suit = Parser.parseFishSuit(msg.content);
 		if (!suit)
 			return msg.channel.send(`Usage: ${this.bot.prefix}selfdeclare [suit]`);
 		game.declareSelf(player, suit);

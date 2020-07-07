@@ -47,9 +47,9 @@ class DeckBuilder extends BasicOptions {
 		const cards = [];
 		for (const card of Card.ALL) {
 			const bad = ~this.get("badCards").indexOf(card)
-			         || (card.rank === Rank.JOKER ? !this.get("hasJokers")
-			                  : ~this.get("badSuits").indexOf(card.suit)
-			                 || ~this.get("badRanks").indexOf(card.rank));
+				|| (card.rank === Rank.JOKER ? !this.get("hasJokers")
+					: ~this.get("badSuits").indexOf(card.suit)
+					|| ~this.get("badRanks").indexOf(card.rank));
 			if (!bad) cards.push(card);
 		}
 		return new Deck(cards, this.get("autodiscard"), this.get("autosort"));

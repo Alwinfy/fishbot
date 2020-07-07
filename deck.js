@@ -52,7 +52,7 @@ class Deck {
 	deal(count) {
 		let stack = this.dealSome(count);
 		while (stack.length < count) {
-			if (!discardSize())
+			if (!this.discardSize())
 				throw new Error(`Deck out of cards after ${stack.length} drawn (${count} requested).`);
 			this.shuffle();
 			stack = stack.concat(this.dealSome(count - stack.length));

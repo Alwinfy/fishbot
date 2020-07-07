@@ -3,7 +3,6 @@
 const {EventEmitter} = require("events");
 const {BasicOptions} = require("./options");
 const {DeckBuilder}  = require("./deckbuilder");
-const {Deck}  = require("./deck");
 const {Suit, Rank, Card}  = require("./card");
 
 class FishError extends Error {
@@ -91,7 +90,7 @@ class FishPlayer extends EventEmitter {
 		return false;
 	}
 
-	requestables(card) {
+	requestables() {
 		if (this.game.config.get("chaos"))
 			return new Set(this.game.deck.cards);
 		const cards = new Set();

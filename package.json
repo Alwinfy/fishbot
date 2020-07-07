@@ -19,5 +19,9 @@
   "homepage": "https://github.com/Alwinfy/fishbot#readme",
   "dependencies": {
     "discord.js": "^11.6.4"
+  },
+  "devDependencies": {
+    "babel-eslint": "^10.1.0",
+    "eslint": "^7.4.0"
   }
 }
