@@ -388,12 +388,10 @@ class FishBotCommands {
 	cmd_start(msg) {
 		let game = this.gameFor(msg);
 		const players = game.totalPlayers();
-/*
 		if (players < FishGame.MIN_PLAYERS)
 			return msg.channel.send(`Can't start without at least ${FishGame.MIN_PLAYERS} players!`);
 		if (Math.abs(fish.teams[0].size - fish.teams[1].size) >= 2)
-			return msg.channel.send(`Teams too imbalanced!`);
-*/
+			return msg.channel.send(`Can't start, teams too imbalanced!`);
 		game = this.bot.games[msg.channel.id] = game.build([charPlugin(), playerEventPlugin(this, msg.channel, x => this.bot.users.get(x))]);
 		game.voteCancels = 0;
 		game.voteTarget = Math.floor(players / 2) + 1;
