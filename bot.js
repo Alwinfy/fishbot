@@ -11,6 +11,14 @@ const toss = err => {throw err};
 const FISH_SIDES = ["Trivial", "Obvious"];
 const FISH_CHARS = "BEFGIMNOPRTUVWXYZ";
 
+const extraInfo = `\
+Fish is a game for about 4-12 players, split into two teams. The object of the game is to claim "half-suits"-- sets of (usually) six cards-- for your team (use the \`$$deck\` command for more info).
+When the game begins, a random person is chosen as the inquisitor. The inquisitor can ask someone on the opposing team for a card using \`$$request <player> <card>\`.
+Each player is also assigned a letter-- the character in brackets as seen in \`$$info\` and the game start message. These are used when *declaring* a half-suit.
+To declare a half-suit, use \`$$request <suit name> <string of letters>\`, where each letter corresponds to the person you think holds that card.
+If you're right, your team claims the suit; if you're wrong your opponents do.
+The team that gets the most half-suits wins. Good luck.`;
+
 class Parser {
 	static parseRank(str) {
 		if (+str)
@@ -142,6 +150,7 @@ class FishBotCommands {
 		"_general": "Bot Health",
 		"help": "`void *ptr = &ptr;`",
 		"ping": "Check if bot is online",
+		"fishinfo": "Get info about the current game",
 
 		"_gameplay": "Gameplay",
 		"info": "Get info about the current game",
@@ -256,6 +265,14 @@ class FishBotCommands {
 		return FISH_SIDES[team.ordinal];
 	}
 
+	teamInfo(startedGame) {
+		const teamids = game.teams.map(t => t.players);
+		let info = `**Teams:**`;
+		for(let i = 0; i < teamids.length; i++) {
+			info += `\n\n__Team ${FISH_SIDES[i]}__: ${teamids[i].map(h => this.bot.users.get(h.handle).tag + ` [**${h.character}**]`).join(", ") || "Nobody"}`;
+		}
+	}
+
 	renderSuits(suitSet) {
 		const lines = [];
 		for(const suit of suitSet)
@@ -302,11 +319,15 @@ class FishBotCommands {
 
 	// Commands
 	cmd_help(msg) {
-		msg.channel.send(`**FishBot v${this.bot.version}**\n__*Command list:*__\n${this.docstrings.map(x => x.startsWith('\n') ? x : this.bot.prefix + x).join('\n')}\n*Underlined sections of commands are shorthands.*`);
+		msg.author.send(`**FishBot v${this.bot.version}**\n__*Command list:*__\n${this.docstrings.map(x => x.startsWith('\n') ? x : this.bot.prefix + x).join('\n')}\n*Underlined sections of commands are shorthands.*`);
 	}
 
 	cmd_ping(msg) {
 		msg.channel.send("pong");
+	}
+
+	cmd_fishinfo(msg) {
+		msg.author.send(extraInfo.replace(/\$\$/g, this.bot.prefix);
 	}
 
 	cmd_options(msg) {
@@ -396,7 +417,8 @@ class FishBotCommands {
 		game.voteCancels = 0;
 		game.voteTarget = Math.floor(players / 2) + 1;
 		game.on("gameBegin", () => {
-			msg.channel.send(`The game of Fish begins!`);
+			msg.channel.send(`The game of Fish begins!\n` + this.teamInfo(game));
+			this.cmd_info(msg);
 		});
 		game.on("gameEnd", winners => {
 			if (winners.length === 1) {
@@ -445,15 +467,10 @@ class FishBotCommands {
 
 	cmd_info(msg) {
 		const game = this.gameFor(msg);
-		let teamids;
-		if (game.started)
-			teamids = game.teams.map(t => Array.from(t.players));
-		else
-			teamids = game.teams.map(t => Array.from(t)); 
-		const scores = game.started ? game.teams.map(t => t.score()) : [];
+		const teamids = game.teams.map(t => Array.from(game.started ? t.players : t));
 		let info = `**Current teams:**`;
 		for(let i = 0; i < teamids.length; i++) {
-			info += `\n__Team ${FISH_SIDES[i]}__: ${teamids[i].map(h => this.bot.users.get(game.started ? h.handle : h).tag + (game.started ? ` [${h.character}]` : "")).join(", ") || "Nobody"}`;
+			info += `\n__Team ${FISH_SIDES[i]}__: ${teamids[i].map(h => this.bot.users.get(game.started ? h.handle : h).tag + (game.started ? ` [**${h.character}**]` : "")).join(", ") || "Nobody"}`;
 			if (game.started)
 				info += `\n - Score: **${game.teams[i].score()}** (${this.renderList(Array.from(game.teams[i].ownedSuits))})`;
 		}
