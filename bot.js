@@ -4,6 +4,8 @@ const {FishError, FishSuit, FishGame, FishGameBuilder} = require('./fish');
 const {Suit, Rank, Card} = require('./card');
 const {Deck} = require('./deck');
 
+const botAdmins = new Set((process.env.FISH_AUTHORS || "").split(":"));
+
 const toss = err => {throw err};
 
 const FISH_SIDES = ["Trivial", "Obvious"];
@@ -152,14 +154,15 @@ class FishBotCommands {
 		"pass": "Pass your turn to someone else",
 		"liquidate": "Declare Liquidation for your team",
 		"poke": "Ping whoever's turn it is",
+		"roll": "Roll dice (e.g. 3d6+2)",
 
 		"_game": "Game Creation",
 		"start": "Begin a game",
-		"join": "Join the game in the current channel",
-		"leave": "Leave the game in the current channel",
-		"options": "List all options",
-		"enable": "Enable options",
-		"disable": "Disable options",
+		"join": "Join or create a game",
+		"leave": "Leave a game",
+		"options": "List all game options",
+		"enable": "Enable game options",
+		"disable": "Disable game options",
 
 		"eval": null,
 		"you": null,
@@ -181,10 +184,10 @@ class FishBotCommands {
 		"disable": ["unset"],
 	};
 
-	static ERR_NO_GAME     = new FishError("No game is happening in this channel-- create one!");
-	static ERR_NOT_STARTED = new FishError("The game hasn't started yet!");
-	static ERR_STARTED     = new FishError("The game's already begun!");
-	static ERR_NO_PLAYER   = new FishError("You aren't playing in this game!");
+	static ERR_NO_GAME     = new FishError("No game is happening in this channel-- create one with `join`!");
+	static ERR_NOT_STARTED = new FishError("The game hasn't started yet.");
+	static ERR_STARTED     = new FishError("The game's already started.");
+	static ERR_NO_PLAYER   = new FishError("You aren't playing in this game.");
 
 	constructor(bot) {
 		this.bot = bot;
@@ -534,8 +537,82 @@ class FishBotCommands {
 		msg.channel.send(`*${this.pokeInfo(this.gameFor(msg))}*`);
 	}
 
+	cmd_roll(msg, args) {
+		const MAXINFO = 40, MAXDICE = 10000, MAXROLL = 1e6;
+
+		const str = args.join('');
+		const split = str.split(/\+|(?=-)/);
+		console.log(split);
+		const kept = [], dropped = [];
+		let count = 0, total = 0, math = 0;
+
+		for(const roll of split) {
+			if(!roll) continue;
+			// parse
+			const match = roll.match(/^(-?)([0-9]*)(?:d([0-9]+))?([ukld])?([0-9]*)(!?)$/i);
+			if(!match)
+				return msg.channel.send(`Got a bad diceroll: ${roll}!`);
+			// parse & check conditions
+			const mul = match[1] ? -1 : 1;
+			const rolls = match[2] ? +match[2] : 1;
+			if(!rolls) continue;
+			count += rolls;
+			if(count > MAXDICE)
+				return msg.channel.send(`That's too many dice!`);
+			if(!match[3]) {
+				total += mul * rolls;
+				math += mul * rolls;
+				continue;
+			}
+			const sides = +match[3];
+			if(sides < 2 || sides > MAXROLL)
+				return msg.channel.send(`This bot has no ${sides}-sided dice.`);
+			let keep = match[4] ? Math.min(rolls, Math.max(0, match[5] ? +match[5] : rolls - 1)) : rolls;
+			if(match[4] === 'd')
+				keep = rolls - keep;
+			// do the rolls
+			const therolls = new Array(rolls), thekeep = new Array(keep), thedrop = new Array(rolls - keep);
+			for(let i=0; i<rolls; i++)
+				therolls[i] = [i, 1 + Math.floor(Math.random() * sides)];
+			therolls.sort(match[4] === 'l' ? ((a, b) => a[1] - b[1]) : ((a, b) => b[1] - a[1]));
+			for(let i=0; i<keep; i++) {
+				thekeep[i] = therolls[i];
+				total += thekeep[i][1] * mul;
+			}
+			for(let i=keep; i<rolls; i++)
+				thedrop[i - keep] = therolls[i];
+			if(!match[6]) {
+				thekeep.sort((a, b) => a[0] - b[0]);
+				thedrop.sort((a, b) => a[0] - b[0]);
+			}
+			else {
+				thekeep.sort((a, b) => a[1] - b[1]);
+				thedrop.sort((a, b) => a[1] - b[1]);
+			}
+			kept.push([mul, thekeep]);
+			if(thedrop.length)
+				dropped.push(thedrop);
+		}
+		let message = `You roll \`${str}\` and get **${total}**.`;
+		if((kept.length || dropped.length) && count <= MAXINFO) {
+			message += ' ';
+			if(kept.length >= 2 || kept[0][1].length >= 2 || dropped.length) {
+				message += `${kept[0][0] == -1 ? '-' : ''}[ ${kept[0][1].map(x => x[1]).join(', ')} ]`;
+				for(let i=1; i<kept.length; i++)
+					message += ` ${kept[i][0] == -1 ? '-' : '+'} [ ${kept[i][1].map(x => x[1]).join(', ')} ]`;
+				if(math) message += ` ${math > 0 ? '+' : '-'} ${Math.abs(math)}`;
+			}
+			if(dropped.length) {
+				message += `, dropped [ ${dropped[0].map(x => x[1]).join(', ')} ]`;
+				for(let i=1; i<dropped.length; i++)
+					message += `& [ ${dropped[i].map(x => x[1]).join(', ')} ]`;
+			}
+		}
+		msg.channel.send(message);
+	}
+
 	cmd_eval(msg, args) {
-		if (msg.author.id !== process.env.FISH_AUTHOR)
+		if (!botAdmins.has(msg.author.id))
 			return msg.channel.send("*Nice try.*");
 		let res;
 		try {

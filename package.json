@@ -1,0 +1,23 @@
+{
+  "name": "fishbot",
+  "version": "0.1.0-alpha",
+  "description": "A Discord bot to play the Fish, the card game",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Alwinfy/fishbot.git"
+  },
+  "author": "Alwinfy",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Alwinfy/fishbot/issues"
+  },
+  "homepage": "https://github.com/Alwinfy/fishbot#readme",
+  "dependencies": {
+    "discord.js": "^11.6.4"
+  }
+}

@@ -282,16 +282,16 @@ class FishTeam {
 }
 
 class FishGame extends EventEmitter {
-	static ERR_WRONG_PLAYER = new FishError("It's not currently your turn!");
-	static ERR_BAD_REQUEST  = new FishError("You can't request that right now!");
-	static ERR_TEAM_REQUEST = new FishError("You can't request a card from someone on your team!");
-	static ERR_DECLARE_SIZE = new FishError("You've declared for the wrong number of cards!");
-	static ERR_DECLARE_TEAM = new FishError("You can't declare a card held by an opponent!");
-	static ERR_BAD_SELFDEC  = new FishError("You don't have all the cards of that suit!");
-	static ERR_EARLY_LIQUID = new FishError("It's too early for your team to liquidate!");
-	static ERR_EARLY_PASS   = new FishError("You can still ask for cards!");
-	static ERR_RECUR_PASS   = new FishError("You can't pass your turn to someone who's out of cards!");
-	static ERR_ENEMY_PASS   = new FishError("You can't pass your turn to the enemy!");
+	static ERR_WRONG_PLAYER = new FishError("It's not currently your turn.");
+	static ERR_BAD_REQUEST  = new FishError("You're not allowed to request that right now.");
+	static ERR_TEAM_REQUEST = new FishError("You can't request a card from someone on your team.");
+	static ERR_DECLARE_SIZE = new FishError("You've declared for the wrong number of cards.");
+	static ERR_DECLARE_TEAM = new FishError("You can't declare a card held by an opponent.");
+	static ERR_BAD_SELFDEC  = new FishError("You don't have all the cards of that half-suit.");
+	static ERR_EARLY_LIQUID = new FishError("Some of your team members still have cards.");
+	static ERR_EARLY_PASS   = new FishError("You still have cards.");
+	static ERR_RECUR_PASS   = new FishError("You can't pass your turn to someone who's out of cards.");
+	static ERR_ENEMY_PASS   = new FishError("You can't pass your turn to the opposing team.");
 
 	static MIN_PLAYERS = 4;
 
