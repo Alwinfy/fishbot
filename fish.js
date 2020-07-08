@@ -228,6 +228,11 @@ class FishGameBuilder extends BasicOptions {
 			name: "No Holds Barred",
 			desc: "Whether players can ask for Any Card Whatsoever with absolutely no penalty",
 			value: false
+		}, {
+			key: "truechaos",
+			name: "No Turns",
+			desc: "Whether players can ask for cards when it's not technically their turn",
+			value: false
 		}]);
 		this.teams = [new Set(), new Set()];
 	}
@@ -347,7 +352,7 @@ class FishGame extends EventEmitter {
 	}
 
 	isTurn(player) {
-		return player === this.currentPlayer;
+		return this.currentPlayer !== null && (this.config.get("truechaos") || player === this.currentPlayer);
 	}
 
 	onTurnEnd(nextPlr) {
