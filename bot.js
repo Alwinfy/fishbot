@@ -59,7 +59,7 @@ class Parser {
 	}
 
 	static parseCards(str, game) {
-		const CARD_RE = /\b((?:10|[1-79jqka])|[a-z]+\s*o[f']?\s*)(?:\s*o[f']?\s*)?([\u2660-\u2667hsd]|c(?=[^e]|$))|\b([rb][a-z]*\s*j)/ig;
+		const CARD_RE = /\b((?:10|[1-9jqka])|[a-z]+\s*o[f']?\s*)(?:\s*o[f']?\s*)?([\u2660-\u2667hsd]|c(?=[^e]|$))|\b([rb][a-z]*\s*j)/ig;
 		const hits = [];
 		for (const match of str.toLowerCase().matchAll(CARD_RE)) {
 			if (match[3] && game && game.cfg.get("jokers")) {
