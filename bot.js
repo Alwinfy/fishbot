@@ -465,7 +465,7 @@ class FishBotCommands {
 				`has unknown cards in: ${this.renderList(Array.from(analyzer.hasSuit))}`,
 			]);
 		}
-		msg.channel.send(`It is known that ${msg.author}:` + data.map(l => `\n - ${l}`).join(""));
+		msg.channel.send(`It is known that ${this.renderPlayer(player)}:` + data.map(l => `\n - ${l}`).join(""));
 	}
 
 	cmd_info(msg) {
