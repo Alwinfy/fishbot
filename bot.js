@@ -1,8 +1,8 @@
 "use strict";
 
-const {FishError, FishSuit, FishGame, FishGameBuilder} = require('./fish');
-const {Suit, Rank, Card} = require('./card');
-const {Deck} = require('./deck');
+const {FishError, FishSuit, FishGame, FishGameBuilder} = require("./fish");
+const {Suit, Rank, Card} = require("./card");
+const {Deck} = require("./deck");
 
 const botAdmins = (process.env.FISH_AUTHORS || "").split(":");
 
@@ -255,6 +255,7 @@ class FishBotCommands {
 		if (!(cmd in this.commands))
 			return;
 		try {
+			console.log(cmd, args);
 			this.commands[cmd](msg, args);
 		} catch (e) {
 			if (e instanceof FishError)
@@ -558,9 +559,10 @@ class FishBotCommands {
 	cmd_roll(msg, args) {
 		const MAXINFO = 40, MAXDICE = 10000, MAXROLL = 1e6;
 
-		const str = args.join('');
+		if (!args.length)
+			return msg.channel.send(`Usage: ${this.bot.prefix}roll 3d6+2`);
+		const str = args.join("");
 		const split = str.split(/\+|(?=-)/);
-		console.log(split);
 		const kept = [], dropped = [];
 		let count = 0, total = 0, math = 0;
 
@@ -615,15 +617,15 @@ class FishBotCommands {
 		if((kept.length || dropped.length) && count <= MAXINFO) {
 			message += ' ';
 			if(kept.length >= 2 || kept[0][1].length >= 2 || dropped.length) {
-				message += `${kept[0][0] === -1 ? '-' : ''}[ ${kept[0][1].map(x => x[1]).join(', ')} ]`;
+				message += `${kept[0][0] === -1 ? '-' : ""}[ ${kept[0][1].map(x => x[1]).join(", ")} ]`;
 				for(let i=1; i<kept.length; i++)
-					message += ` ${kept[i][0] === -1 ? '-' : '+'} [ ${kept[i][1].map(x => x[1]).join(', ')} ]`;
+					message += ` ${kept[i][0] === -1 ? '-' : '+'} [ ${kept[i][1].map(x => x[1]).join(", ")} ]`;
 				if(math) message += ` ${math > 0 ? '+' : '-'} ${Math.abs(math)}`;
 			}
 			if(dropped.length) {
-				message += `, dropped [ ${dropped[0].map(x => x[1]).join(', ')} ]`;
+				message += `, dropped [ ${dropped[0].map(x => x[1]).join(", ")} ]`;
 				for(let i=1; i<dropped.length; i++)
-					message += `& [ ${dropped[i].map(x => x[1]).join(', ')} ]`;
+					message += `& [ ${dropped[i].map(x => x[1]).join(", ")} ]`;
 			}
 		}
 		msg.channel.send(message);
@@ -654,7 +656,7 @@ class FishBot extends require("discord.js").Client {
 	version = "0.1.0-alpha";
 
 	checkPrefix(msg) {
-		const trimmed = msg.content.replace(/^\s+/, '');
+		const trimmed = msg.content.replace(/^\s+/, "");
 		return trimmed.startsWith(this.prefix)
 			? trimmed.substring(this.prefix.length) : null;
 	}
