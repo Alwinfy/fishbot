@@ -23,7 +23,7 @@ class FishSuit {
 			Card.cardFor(Suit.SPADES, Rank.EIGHT),
 			Card.cardFor(Suit.HEARTS, Rank.EIGHT),
 			Card.cardFor(Suit.DIAMONDS, Rank.EIGHT),
-			Card.cardFor(Suit.HEARTS, Rank.EIGHT),
+			Card.cardFor(Suit.CLUBS, Rank.EIGHT),
 			Card.cardFor(Suit.SPADES, Rank.JOKER),
 			Card.cardFor(Suit.HEARTS, Rank.JOKER)
 		]));
