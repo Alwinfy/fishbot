@@ -33,7 +33,6 @@ class Rank {
 	static ALL   = [];
 	static _cnt  = 0;
 
-	static ACE   = new Rank("Ace",   "A");
 	static TWO   = new Rank("Two",   "2");
 	static THREE = new Rank("Three", "3");
 	static FOUR  = new Rank("Four",  "4");
@@ -46,6 +45,7 @@ class Rank {
 	static JACK  = new Rank("Jack",  "J");
 	static QUEEN = new Rank("Queen", "Q");
 	static KING  = new Rank("King",  "K");
+	static ACE   = new Rank("Ace",   "A");
 	static JOKER = new Rank("Joker", "*");
 
 	constructor(name, abbr) {
