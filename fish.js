@@ -83,7 +83,7 @@ class FishPlayer extends EventEmitter {
 
 	canRequest(card) {
 		if (this.game.config.get("chaos"))
-			return card in this.game.deck.cards;
+			return this.game.deck.cards.indexOf(card) >= 0;
 		if (!this.game.config.get("duplicates") && this.hand.has(card))
 			return false;
 		const hsuit = FishSuit.suitFor(card).cards;
@@ -304,6 +304,7 @@ class FishGame extends EventEmitter {
 	static ERR_WRONG_PLAYER = new FishError("It's not currently your turn.");
 	static ERR_BAD_REQUEST  = new FishError("You're not allowed to request that right now.");
 	static ERR_TEAM_REQUEST = new FishError("You can't request a card from someone on your team.");
+	static ERR_2_DECLARE    = new FishError("This suit has already been declared!");
 	static ERR_DECLARE_SIZE = new FishError("You've declared for the wrong number of cards.");
 	static ERR_DECLARE_HOMO = new FishError("Not everyone that you declared was on the same team.");
 	static ERR_DECLARE_TEAM = new FishError("You can't declare a card held by an opponent.");
@@ -436,6 +437,9 @@ class FishGame extends EventEmitter {
 	}
 
 	declare(declarer, suit, players) {
+		if (!this.remainingSuits.has(suit)) {
+			throw FishGame.ERR_2_DECLARE;
+		}
 		if (suit.cards.length !== players.length) {
 			throw FishGame.ERR_DECLARE_SIZE;
 		}
